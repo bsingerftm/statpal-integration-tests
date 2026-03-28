@@ -37,41 +37,6 @@ jobs:
           path: test-responses/
           retention-days: 30
 
-      - name: Notify Slack of Success
-        if: success()
-        uses: slackapi/slack-github-action@v2.0.0
-        env:
-          REF_NAME: ${{ github.ref_name }}
-          COMMIT_SHA: ${{ github.sha }}
-          ACTOR: ${{ github.actor }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
-        with:
-          webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
-          webhook-type: incoming-webhook
-          payload: |
-            {
-              "text": "StatPal Integration Tests Passed",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": ":white_check_mark: *StatPal Integration Tests Passed*\n*Branch:* `${{ env.REF_NAME }}`\n*Commit:* `${{ env.COMMIT_SHA }}`\n*Author:* ${{ env.ACTOR }}"
-                  }
-                },
-                {
-                  "type": "actions",
-                  "elements": [
-                    {
-                      "type": "button",
-                      "text": { "type": "plain_text", "text": "View Run" },
-                      "url": "${{ env.RUN_URL }}"
-                    }
-                  ]
-                }
-              ]
-            }
-
       # - name: Email StatPal Support on Failure
       #   if: failure()
       #   uses: dawidd6/action-send-mail@v3
