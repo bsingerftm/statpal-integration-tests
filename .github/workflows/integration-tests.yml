@@ -58,6 +58,41 @@ jobs:
       #
       #       View the full run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
+      - name: Parse Test Failures
+        if: failure()
+        id: test-failures
+        run: |
+          if [ -f test-results.json ]; then
+            FAILURE_SUMMARY=$(node -e "
+              const fs = require('fs');
+              const results = JSON.parse(fs.readFileSync('test-results.json', 'utf8'));
+              const failures = [];
+              for (const file of results.testResults || []) {
+                for (const test of file.assertionResults || []) {
+                  if (test.status === 'failed') {
+                    const name = test.ancestorTitles.concat(test.title).join(' > ');
+                    const msg = (test.failureMessages || []).map(m =>
+                      m.split('\n').slice(0, 3).join(' ').substring(0, 200)
+                    ).join('; ');
+                    failures.push('• *' + name + '*\n   ' + msg);
+                  }
+                }
+              }
+              if (failures.length === 0) {
+                console.log('No parsed failures (tests may have timed out or crashed).');
+              } else {
+                console.log(failures.join('\n'));
+              }
+            ")
+          else
+            FAILURE_SUMMARY="test-results.json not found — tests may have crashed before producing output."
+          fi
+          {
+            echo "summary<<FAILURE_EOF"
+            echo "$FAILURE_SUMMARY"
+            echo "FAILURE_EOF"
+          } >> "$GITHUB_OUTPUT"
+
       - name: Notify Slack on Failure
         if: failure()
         uses: slackapi/slack-github-action@v2.0.0
@@ -78,6 +113,13 @@ jobs:
                   "text": {
                     "type": "mrkdwn",
                     "text": ":x: *StatPal Integration Tests Failed*\n*Branch:* `${{ env.REF_NAME }}`\n*Commit:* `${{ env.COMMIT_SHA }}`\n*Author:* ${{ env.ACTOR }}"
+                  }
+                },
+                {
+                  "type": "section",
+                  "text": {
+                    "type": "mrkdwn",
+                    "text": ":memo: *Failing Tests:*\n${{ steps.test-failures.outputs.summary }}"
                   }
                 },
                 {

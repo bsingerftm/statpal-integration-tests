@@ -7,7 +7,8 @@ export default defineConfig({
     hookTimeout: 10_000,
     fileParallelism: false,
     sequence: { concurrent: false },
-    reporters: ["verbose"],
+    reporters: ["verbose", "json"],
+    outputFile: { json: "test-results.json" },
     env: loadEnv("", process.cwd(), ""),
   },
 });
