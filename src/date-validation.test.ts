@@ -5,6 +5,8 @@ import {
   extractDateFields,
   dateMatchesOffset,
   dateWithinDaysOfToday,
+  parseDDMMYYYY,
+  expectedDateForOffset,
   getNhlLivescores,
   getNhlDaily,
   getNhlOdds,
@@ -20,6 +22,30 @@ import {
 
 afterEach(() => rateLimitDelay());
 
+/** Format a Date as DD.MM.YYYY for display */
+function formatDateDDMMYYYY(date: Date): string {
+  const day = String(date.getUTCDate()).padStart(2, "0");
+  const month = String(date.getUTCMonth() + 1).padStart(2, "0");
+  const year = date.getUTCFullYear();
+  return `${day}.${month}.${year}`;
+}
+
+/** Get today's date formatted as DD.MM.YYYY */
+function getTodayFormatted(): string {
+  const now = new Date();
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return formatDateDDMMYYYY(today);
+}
+
+/** Calculate days difference between a DD.MM.YYYY date string and today */
+function getDaysDifferenceFromToday(dateStr: string): number {
+  const parsed = parseDDMMYYYY(dateStr);
+  const now = new Date();
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  const diffMs = parsed.getTime() - today.getTime();
+  return Math.round(diffMs / (1000 * 60 * 60 * 24));
+}
+
 /**
  * Asserts all dates are valid calendar dates.
  */
@@ -27,7 +53,14 @@ function assertAllDatesValid(data: unknown, label: string) {
   const dates = extractDateFields(data);
   if (dates.length === 0) return;
   for (const d of dates) {
-    expect(isValidDate(d), `${label}: invalid date "${d}"`).toBe(true);
+    const valid = isValidDate(d);
+    expect(
+      valid,
+      `${label}: invalid date found
+  Actual value: "${d}"
+  Expected format: DD.MM.YYYY (valid calendar date)
+  Reason: ${/^\d{2}\.\d{2}\.\d{4}$/.test(d) ? "Format matches but date is not a valid calendar date" : `Format does not match DD.MM.YYYY pattern`}`,
+    ).toBe(true);
   }
 }
 
@@ -39,14 +72,31 @@ function assertAllDatesValid(data: unknown, label: string) {
 function assertDatesNearOffset(data: unknown, offset: number, label: string) {
   const dates = extractDateFields(data);
   if (dates.length === 0) return;
+  const expectedDate = expectedDateForOffset(offset);
+  const expectedFormatted = formatDateDDMMYYYY(expectedDate);
+  const todayFormatted = getTodayFormatted();
+
   for (const d of dates) {
-    expect(isValidDate(d), `${label}: invalid date "${d}"`).toBe(true);
+    const valid = isValidDate(d);
+    expect(
+      valid,
+      `${label}: invalid date found
+  Actual value: "${d}"
+  Expected format: DD.MM.YYYY (valid calendar date)`,
+    ).toBe(true);
+
     const matchesExact = dateMatchesOffset(d, offset);
     const matchesMinus1 = dateMatchesOffset(d, offset - 1);
     const matchesPlus1 = dateMatchesOffset(d, offset + 1);
+    const actualDiff = getDaysDifferenceFromToday(d);
+
     expect(
       matchesExact || matchesMinus1 || matchesPlus1,
-      `${label}: date "${d}" is not within +-1 day of expected offset ${offset > 0 ? "+" : ""}${offset} from today`,
+      `${label}: date outside expected range
+  Actual value: "${d}" (${actualDiff > 0 ? "+" : ""}${actualDiff} days from today)
+  Expected: "${expectedFormatted}" (${offset > 0 ? "+" : ""}${offset} days from today, ±1 day tolerance)
+  Today: "${todayFormatted}"
+  Difference from expected: ${Math.abs(actualDiff - offset)} days`,
     ).toBe(true);
   }
 }
@@ -58,11 +108,27 @@ function assertDatesNearOffset(data: unknown, offset: number, label: string) {
 function assertDatesWithinRange(data: unknown, days: number, label: string) {
   const dates = extractDateFields(data);
   if (dates.length === 0) return;
+  const todayFormatted = getTodayFormatted();
+
   for (const d of dates) {
-    expect(isValidDate(d), `${label}: invalid date "${d}"`).toBe(true);
+    const valid = isValidDate(d);
     expect(
-      dateWithinDaysOfToday(d, days),
-      `${label}: date "${d}" is more than ${days} days from today`,
+      valid,
+      `${label}: invalid date found
+  Actual value: "${d}"
+  Expected format: DD.MM.YYYY (valid calendar date)`,
+    ).toBe(true);
+
+    const withinRange = dateWithinDaysOfToday(d, days);
+    const actualDiff = getDaysDifferenceFromToday(d);
+
+    expect(
+      withinRange,
+      `${label}: date outside allowed range
+  Actual value: "${d}" (${actualDiff > 0 ? "+" : ""}${actualDiff} days from today)
+  Expected: within ±${days} days of today
+  Today: "${todayFormatted}"
+  Exceeds range by: ${Math.abs(actualDiff) - days} days`,
     ).toBe(true);
   }
 }
