@@ -18,7 +18,7 @@ jobs:
       - name: Setup Node.js
         uses: actions/setup-node@v4
         with:
-          node-version: "20"
+          node-version: "24"
           cache: "npm"
 
       - name: Install Dependencies
@@ -58,13 +58,19 @@ jobs:
       #
       #       View the full run: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
 
-      - name: Parse Test Failures
+      - name: Build Slack Payload
         if: failure()
-        id: test-failures
+        env:
+          REF_NAME: ${{ github.ref_name }}
+          COMMIT_SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         run: |
-          if [ -f test-results.json ]; then
-            FAILURE_SUMMARY=$(node -e "
-              const fs = require('fs');
+          node -e "
+            const fs = require('fs');
+
+            let summary;
+            if (fs.existsSync('test-results.json')) {
               const results = JSON.parse(fs.readFileSync('test-results.json', 'utf8'));
               const failures = [];
               for (const file of results.testResults || []) {
@@ -78,59 +84,53 @@ jobs:
                   }
                 }
               }
-              if (failures.length === 0) {
-                console.log('No parsed failures (tests may have timed out or crashed).');
-              } else {
-                console.log(failures.join('\n'));
-              }
-            ")
-          else
-            FAILURE_SUMMARY="test-results.json not found — tests may have crashed before producing output."
-          fi
-          {
-            echo "summary<<FAILURE_EOF"
-            echo "$FAILURE_SUMMARY"
-            echo "FAILURE_EOF"
-          } >> "$GITHUB_OUTPUT"
+              summary = failures.length === 0
+                ? 'No parsed failures (tests may have timed out or crashed).'
+                : failures.join('\n');
+            } else {
+              summary = 'test-results.json not found — tests may have crashed before producing output.';
+            }
+
+            const payload = {
+              text: 'StatPal Integration Tests Failed',
+              blocks: [
+                {
+                  type: 'section',
+                  text: {
+                    type: 'mrkdwn',
+                    text: ':x: *StatPal Integration Tests Failed*\n' +
+                      '*Branch:* \`' + process.env.REF_NAME + '\`\n' +
+                      '*Commit:* \`' + process.env.COMMIT_SHA + '\`\n' +
+                      '*Author:* ' + process.env.ACTOR,
+                  },
+                },
+                {
+                  type: 'section',
+                  text: {
+                    type: 'mrkdwn',
+                    text: ':memo: *Failing Tests:*\n' + summary,
+                  },
+                },
+                {
+                  type: 'actions',
+                  elements: [
+                    {
+                      type: 'button',
+                      text: { type: 'plain_text', text: 'View Run' },
+                      url: process.env.RUN_URL,
+                    },
+                  ],
+                },
+              ],
+            };
+
+            fs.writeFileSync('slack-payload.json', JSON.stringify(payload));
+          "
 
       - name: Notify Slack on Failure
         if: failure()
         uses: slackapi/slack-github-action@v2.0.0
-        env:
-          REF_NAME: ${{ github.ref_name }}
-          COMMIT_SHA: ${{ github.sha }}
-          ACTOR: ${{ github.actor }}
-          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
         with:
           webhook: ${{ secrets.SLACK_WEBHOOK_URL }}
           webhook-type: incoming-webhook
-          payload: |
-            {
-              "text": "StatPal Integration Tests Failed",
-              "blocks": [
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": ":x: *StatPal Integration Tests Failed*\n*Branch:* `${{ env.REF_NAME }}`\n*Commit:* `${{ env.COMMIT_SHA }}`\n*Author:* ${{ env.ACTOR }}"
-                  }
-                },
-                {
-                  "type": "section",
-                  "text": {
-                    "type": "mrkdwn",
-                    "text": ":memo: *Failing Tests:*\n${{ steps.test-failures.outputs.summary }}"
-                  }
-                },
-                {
-                  "type": "actions",
-                  "elements": [
-                    {
-                      "type": "button",
-                      "text": { "type": "plain_text", "text": "View Run" },
-                      "url": "${{ env.RUN_URL }}"
-                    }
-                  ]
-                }
-              ]
-            }
+          payload-file-path: slack-payload.json
