@@ -231,6 +231,24 @@ export function dateWithinDaysOfToday(dateStr: string, days: number): boolean {
   return diffDays <= days;
 }
 
+/**
+ * Check if a DD.MM.YYYY date string is today or in the future (not in the past).
+ * Odds can be for any upcoming match, so the only invalid case is a past date.
+ *
+ * Allows a 1-day lag tolerance to account for API-vs-UTC timezone differences:
+ * a late North American game on its local game day (e.g. 20.07 local) can carry a
+ * date that is one day behind UTC once UTC has rolled to the next day, so a strict
+ * comparison would wrongly reject today's live/upcoming odds. This mirrors the ±1
+ * day tolerance the daily-date assertions already use. Dates older than yesterday
+ * (UTC) are still rejected.
+ */
+export function dateNotInPast(dateStr: string): boolean {
+  const parsed = parseDDMMYYYY(dateStr);
+  const now = new Date();
+  const yesterday = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() - 1));
+  return parsed.getTime() >= yesterday.getTime();
+}
+
 // --- Auth failure ---
 
 export function getUnauthorizedRequest() {

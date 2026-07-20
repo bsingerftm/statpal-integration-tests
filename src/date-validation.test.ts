@@ -4,7 +4,7 @@ import {
   isValidDate,
   extractDateFields,
   dateMatchesOffset,
-  dateWithinDaysOfToday,
+  dateNotInPast,
   parseDDMMYYYY,
   expectedDateForOffset,
   getNhlLivescores,
@@ -102,10 +102,11 @@ function assertDatesNearOffset(data: unknown, offset: number, label: string) {
 }
 
 /**
- * Asserts all match dates in an odds response are within a reasonable window (14 days of today).
- * Odds can include upcoming matches so we allow a wider range.
+ * Asserts all match dates in an odds response are not in the past.
+ * Odds can be for any upcoming match on any future day, so the only
+ * invalid case is a date before today.
  */
-function assertDatesWithinRange(data: unknown, days: number, label: string) {
+function assertDatesNotInPast(data: unknown, label: string) {
   const dates = extractDateFields(data);
   if (dates.length === 0) return;
   const todayFormatted = getTodayFormatted();
@@ -119,16 +120,15 @@ function assertDatesWithinRange(data: unknown, days: number, label: string) {
   Expected format: DD.MM.YYYY (valid calendar date)`,
     ).toBe(true);
 
-    const withinRange = dateWithinDaysOfToday(d, days);
+    const notInPast = dateNotInPast(d);
     const actualDiff = getDaysDifferenceFromToday(d);
 
     expect(
-      withinRange,
-      `${label}: date outside allowed range
+      notInPast,
+      `${label}: date is in the past
   Actual value: "${d}" (${actualDiff > 0 ? "+" : ""}${actualDiff} days from today)
-  Expected: within ±${days} days of today
-  Today: "${todayFormatted}"
-  Exceeds range by: ${Math.abs(actualDiff) - days} days`,
+  Expected: today or a future date (yesterday allowed for API/UTC timezone lag)
+  Today: "${todayFormatted}"`,
     ).toBe(true);
   }
 }
@@ -158,10 +158,10 @@ describe("Date Validation — NHL Daily", () => {
 });
 
 describe("Date Validation — NHL Odds", () => {
-  it("should have dates within 14 days of today", async () => {
+  it("should not have dates in the past", async () => {
     const res = await getNhlOdds();
     expect(res.status).toBe(200);
-    assertDatesWithinRange(res.data, 14, "nhl/odds");
+    assertDatesNotInPast(res.data, "nhl/odds");
   });
 });
 
@@ -176,10 +176,10 @@ describe("Date Validation — NFL Livescores", () => {
 });
 
 describe("Date Validation — NFL Odds", () => {
-  it("should have dates within 14 days of today", async () => {
+  it("should not have dates in the past", async () => {
     const res = await getNflOdds();
     expect(res.status).toBe(200);
-    assertDatesWithinRange(res.data, 14, "nfl/odds");
+    assertDatesNotInPast(res.data, "nfl/odds");
   });
 });
 
@@ -208,10 +208,10 @@ describe("Date Validation — MLB Daily", () => {
 });
 
 describe("Date Validation — MLB Odds", () => {
-  it("should have dates within 14 days of today", async () => {
+  it("should not have dates in the past", async () => {
     const res = await getMlbOdds();
     expect(res.status).toBe(200);
-    assertDatesWithinRange(res.data, 14, "mlb/odds");
+    assertDatesNotInPast(res.data, "mlb/odds");
   });
 });
 
@@ -240,9 +240,9 @@ describe("Date Validation — NBA Daily", () => {
 });
 
 describe("Date Validation — NBA Odds", () => {
-  it("should have dates within 14 days of today", async () => {
+  it("should not have dates in the past", async () => {
     const res = await getNbaOdds();
     expect(res.status).toBe(200);
-    assertDatesWithinRange(res.data, 14, "nba/odds");
+    assertDatesNotInPast(res.data, "nba/odds");
   });
 });
