@@ -231,6 +231,17 @@ export function dateWithinDaysOfToday(dateStr: string, days: number): boolean {
   return diffDays <= days;
 }
 
+/**
+ * Check if a DD.MM.YYYY date string is today or in the future (not in the past).
+ * Odds can be for any upcoming match, so the only invalid case is a past date.
+ */
+export function dateNotInPast(dateStr: string): boolean {
+  const parsed = parseDDMMYYYY(dateStr);
+  const now = new Date();
+  const today = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate()));
+  return parsed.getTime() >= today.getTime();
+}
+
 // --- Auth failure ---
 
 export function getUnauthorizedRequest() {
