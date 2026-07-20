@@ -127,7 +127,7 @@ function assertDatesNotInPast(data: unknown, label: string) {
       notInPast,
       `${label}: date is in the past
   Actual value: "${d}" (${actualDiff > 0 ? "+" : ""}${actualDiff} days from today)
-  Expected: today or a future date
+  Expected: today or a future date (yesterday allowed for API/UTC timezone lag)
   Today: "${todayFormatted}"`,
     ).toBe(true);
   }
